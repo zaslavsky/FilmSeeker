@@ -24,32 +24,55 @@ from prompt_toolkit.widgets import (
     CheckboxList,
 )
 from sakila_models import *
+import info_texts
 
 database.connect()
 print("Подключено успешно!")
 
+Categoryes = [Checkbox(text=row.name) for row in Category.select()]
+
+year_completer = WordCompleter(
+    [str(film.release_year) for film in Film.select(Film.release_year).distinct()]
+)
+
+result_output_area = TextArea(read_only=True, scrollbar=True)
+name_input_area = TextArea(focus_on_click=True)
+year_input_area = TextArea(focus_on_click=True, completer=year_completer)
+category_input_area = HSplit(Categoryes)
+test_button = Button(text="Запилить", handler=lambda: debug_output())
+search_button = Button(text="Нйти", handler=lambda: serach())
+
+
+# Функция для обработки ответа на запрос подтверждения выхода
+def confirm_exit(should_exit):
+    root_container.floats.pop()
+    if should_exit:
+        get_app().exit(result=True)
+
+
 def do_exit(something=None):
     get_app().exit(result=False)
 
+
+def do_exit_with_confirm(something=None):
+    dialog = Dialog(
+        title="Подтверждение выхода",
+        body=Label(text="Уже наигрались?"),
+        buttons=[
+            Button(text="Да", handler=lambda: confirm_exit(True)),
+            Button(text="Нет", handler=lambda: confirm_exit(False)),
+        ],
+    )
+    root_container.floats.append(Float(content=dialog))
+
+
 def debug_output():
-    output_target.text = str([e.values[0][1] for e in Categoryes if e.checked]) + '\n\n\n'+ str(dir(Categoryes[0]))
+    result_output_area.text = (
+        str(dir(root_container.floats))
+        + "\n\n\n"
+        + " ".join([str(i) + "\n" for i in root_container.floats])
+    )
 
-Categoryes = [Checkbox(text=row.name) for row in Category.select()]
-
-year_completer = WordCompleter([str(film.release_year) for film in Film.select(Film.release_year).distinct()])
-
-result_output_area = TextArea(read_only=True)
-name_input_area = TextArea()
-year_input_area = TextArea(prompt="Введите год: ", completer=year_completer)
-category_input_area = HSplit(Categoryes)
-
-test_button = Button(
-    text="Запилить", handler=lambda: debug_output()
-)
-search_button = Button(
-    text="Нйти",
-    handler=lambda: serach()
-)
 
 def serach():
     # default query
@@ -62,18 +85,40 @@ def serach():
     if name_input_area.text != "":
         name = name_input_area.text
         query = query.where(Film.title.contains(name))
-    # Год писали?
+    # А Год писали?
     if year_input_area.text != "":
         query = query.where(Film.release_year == year_input_area.text)
     # Посмотрим что мы там начекбоксили
     Categoryes_list = [e.values[0][1] for e in Categoryes if e.checked]
     # Если что-то начекбоксили то применим доп. фильтр
-    if len(Categoryes_list)!=0:
+    if len(Categoryes_list) != 0:
         query = query.where(Category.name.in_(Categoryes_list))
 
     # ВЫХЛОП
     result = "\n".join([str(i) for i in query.dicts()])
     result_output_area.text = result
+
+
+# Функция для вызова диалогового окна
+def show_help():
+    dialog = Dialog(
+        title="help",
+        body=Label(info_texts.help),
+        buttons=[Button(text="OK", handler=lambda: close_dialog())],
+    )
+    root_container.floats.append(Float(content=dialog))
+
+def show_about():
+    dialog = Dialog(
+        title="Обаут xD",
+        body=Label(info_texts.about),
+        buttons=[Button(text="OK", handler=lambda: close_dialog())],
+    )
+    root_container.floats.append(Float(content=dialog))
+
+def close_dialog():
+    root_container.floats.pop()
+
 
 main_container = HSplit(
     [
@@ -85,10 +130,7 @@ main_container = HSplit(
                         Frame(title="Год выхода", body=year_input_area),
                     ],
                 ),
-                Frame(
-                    title="Жанры кино",
-                    body=category_input_area,
-                ),
+                Frame(title="Жанры кино", body=category_input_area),
             ]
         ),
         test_button,
@@ -100,13 +142,22 @@ main_container = HSplit(
 root_container = MenuContainer(
     body=main_container,
     menu_items=[
-        MenuItem("Menu",
-                 children=[
-                     MenuItem("Help"),
-                     MenuItem("About"),
-                     MenuItem("Exit", handler=do_exit)  # Допили нормальный хэндлер с диалогом
-                     ]
-                )
+        MenuItem(
+            "Menu",
+            children=[
+                MenuItem("Help", handler=show_help),
+                MenuItem("About", handler=show_about),
+                MenuItem("Exit", handler=do_exit_with_confirm),
+            ],
+        ),
+        MenuItem(
+            "Layouts",
+            children=[
+                MenuItem("Layout_1"),
+                MenuItem("Layout_2"),
+                MenuItem("Layout_3"),
+            ],
+        ),
     ],
     floats=[
         Float(
@@ -121,10 +172,8 @@ root_container = MenuContainer(
 bindings = KeyBindings()
 bindings.add("s-tab")(focus_previous)
 bindings.add("tab")(focus_next)
-# bindings.add("left")(focus_previous)
-# bindings.add("right")(focus_next)
 bindings.add("c-q")(do_exit)
-
+bindings.add("c-c")(do_exit)
 
 style = Style.from_dict(
     {

@@ -2,6 +2,17 @@ import os
 from dotenv import load_dotenv
 from peewee import *
 
+"""
+Базовая версия файла сгенерированна визардом peewee.
+
+Пример использования визарда:
+python -m pwiz -e mysql -H localhost -p 3306 -u my_user -P my_password my_database > models.py
+
+Естественно в базовом варианте эти модели не совсем гладкие и без ручной шлифовки не обойтись.
+1) было много лишних таблиц
+2) Не все типы данных были назначены корректно
+"""
+
 # Загрузим переменные
 load_dotenv()
 
@@ -33,52 +44,6 @@ class UnknownField(object):
 class BaseModel(Model):
     class Meta:
         database = database
-
-
-class Actor(BaseModel):
-    actor_id = AutoField()
-    first_name = CharField()
-    last_name = CharField(index=True)
-    last_update = DateTimeField(constraints=[SQL("DEFAULT CURRENT_TIMESTAMP")])
-
-    class Meta:
-        table_name = "actor"
-
-
-class Country(BaseModel):
-    country = CharField()
-    country_id = AutoField()
-    last_update = DateTimeField(constraints=[SQL("DEFAULT CURRENT_TIMESTAMP")])
-
-    class Meta:
-        table_name = "country"
-
-
-class City(BaseModel):
-    city = CharField()
-    city_id = AutoField()
-    country = ForeignKeyField(
-        column_name="country_id", field="country_id", model=Country
-    )
-    last_update = DateTimeField(constraints=[SQL("DEFAULT CURRENT_TIMESTAMP")])
-
-    class Meta:
-        table_name = "city"
-
-
-class Address(BaseModel):
-    address = CharField()
-    address2 = CharField(null=True)
-    address_id = AutoField()
-    city = ForeignKeyField(column_name="city_id", field="city_id", model=City)
-    district = CharField()
-    last_update = DateTimeField(constraints=[SQL("DEFAULT CURRENT_TIMESTAMP")])
-    location = UnknownField(index=True)  # geometry
-    phone = CharField()
-    postal_code = CharField(null=True)
-
-    class Meta:
-        table_name = "address"
 
 
 class Category(BaseModel):
@@ -126,17 +91,6 @@ class Film(BaseModel):
 
     class Meta:
         table_name = "film"
-
-
-class FilmActor(BaseModel):
-    actor = ForeignKeyField(column_name="actor_id", field="actor_id", model=Actor)
-    film = ForeignKeyField(column_name="film_id", field="film_id", model=Film)
-    last_update = DateTimeField(constraints=[SQL("DEFAULT CURRENT_TIMESTAMP")])
-
-    class Meta:
-        table_name = "film_actor"
-        indexes = ((("actor", "film"), True),)
-        primary_key = CompositeKey("actor", "film")
 
 
 class FilmCategory(BaseModel):
