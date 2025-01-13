@@ -1,0 +1,1 @@
+poetry run python film_seeker/main.py
