@@ -67,11 +67,7 @@ def do_exit_with_confirm(something=None):
 
 
 def debug_output():
-    result_output_area.text = (
-        str(dir(root_container.floats))
-        + "\n\n\n"
-        + " ".join([str(i) + "\n" for i in root_container.floats])
-    )
+    result_output_area.text = str(get_app().layout.container.content.get_children()[-1])
 
 
 def serach():
@@ -104,17 +100,25 @@ def show_help():
     dialog = Dialog(
         title="help",
         body=Label(info_texts.help),
-        buttons=[Button(text="OK", handler=lambda: close_dialog())],
+        buttons=[Button(text="OK", handler=lambda: root_container.floats.pop())],
     )
     root_container.floats.append(Float(content=dialog))
+
 
 def show_about():
     dialog = Dialog(
         title="Обаут xD",
         body=Label(info_texts.about),
-        buttons=[Button(text="OK", handler=lambda: close_dialog())],
+        buttons=[Button(text="OK", handler=lambda: root_container.floats.pop())],
     )
     root_container.floats.append(Float(content=dialog))
+
+
+def change_layout(container_placeholder):
+    app = get_app()
+    app.layout.container.content.get_children()[-1] = container_placeholder
+    app.invalidate()
+
 
 def close_dialog():
     root_container.floats.pop()
@@ -139,8 +143,28 @@ main_container = HSplit(
     ]
 )
 
+main_container_2 = HSplit(
+    [
+        VSplit(
+            [
+                HSplit(
+                    [
+                        Frame(title="Слова", body=name_input_area, height=5),
+                        Frame(title="Год выхода", body=year_input_area, height=5),
+                        Frame(title="Жанры кино", body=category_input_area),
+                        test_button,
+                        search_button,
+                    ],
+                    width=20,
+                ),
+                Frame(body=result_output_area, title="Результаты поиска"),
+            ]
+        )
+    ]
+)
+
 root_container = MenuContainer(
-    body=main_container,
+    body=main_container_2,
     menu_items=[
         MenuItem(
             "Menu",
@@ -153,9 +177,8 @@ root_container = MenuContainer(
         MenuItem(
             "Layouts",
             children=[
-                MenuItem("Layout_1"),
-                MenuItem("Layout_2"),
-                MenuItem("Layout_3"),
+                MenuItem("Layout 1", handler=lambda: change_layout(main_container)),
+                MenuItem("Layout 2", handler=lambda: change_layout(main_container_2))
             ],
         ),
     ],
@@ -190,7 +213,6 @@ style = Style.from_dict(
     }
 )
 
-
 application = Application(
     layout=Layout(root_container, focused_element=main_container),
     key_bindings=bindings,
@@ -199,10 +221,5 @@ application = Application(
     full_screen=True,
 )
 
-
-def run():
-    application.run()
-
-
 if __name__ == "__main__":
-    run()
+    application.run()
