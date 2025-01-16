@@ -44,7 +44,7 @@ black_white =  Style.from_dict({
     "focused": "bg:#ffffff #000000 bold",  # Белый фон, черный текст для активных элементов
 })
 
-cozy_gray = Style.from_dict(
+cold_steel = Style.from_dict(
     {
         # Основной фон и текст
         "": "bg:#000000 fg:#ffffff",  # Общий стиль

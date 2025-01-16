@@ -12,7 +12,6 @@ from prompt_toolkit.layout.layout import Layout
 from prompt_toolkit.layout.menus import CompletionsMenu
 from prompt_toolkit.formatted_text import ANSI
 from prompt_toolkit.widgets import (
-    Box,
     Button,
     Checkbox,
     Dialog,
@@ -20,10 +19,7 @@ from prompt_toolkit.widgets import (
     Label,
     MenuContainer,
     MenuItem,
-    ProgressBar,
-    RadioList,
     TextArea,
-    CheckboxList,
 )
 from sakila_models import *
 import info_texts
@@ -73,12 +69,6 @@ history_content = []
 most_recent_request_area = Frame(body=HSplit(history_content), title="История")
 
 
-def confirm_exit(should_exit):
-    root_container.floats.pop()
-    if should_exit:
-        get_app().exit(result=True)
-
-
 def do_exit(something=None):
     get_app().exit(result=False)
 
@@ -88,29 +78,17 @@ def do_exit_with_confirm(something=None):
         title="Подтверждение выхода",
         body=Label(text="Уже наигрались?"),
         buttons=[
-            Button(text="Да", handler=lambda: confirm_exit(True)),
-            Button(text="Нет", handler=lambda: confirm_exit(False)),
+            Button(text="Да", handler=lambda: do_exit()),
+            Button(text="Нет", handler=lambda: root_container.floats.pop()),
+            Button(text="ПОНИ!", handler=lambda: debug_output())
         ],
     )
     root_container.floats.append(Float(content=dialog))
 
 
 def debug_output():
-    # result_output_area.text = str(get_app().layout.container.content.get_children()[-1])
     result_output_area.text = info_texts.luna
-    # query = (
-    #     Film.select(
-    #         Film.film_id,
-    #         Film.title,
-    #         Category.name.alias("category"),
-    #         Film.release_year,
-    #         Film.description,
-    #     )
-    #     .join(FilmCategory, on=(Film.film_id == FilmCategory.film_id))
-    #     .join(Category, on=(FilmCategory.category_id == Category.category_id))
-    # ).limit(5)
-    # most_recent_request_area.text = str(query)
-
+    root_container.floats.pop()
 
 def show_warn(head, body):
     dialog = Dialog(
@@ -239,16 +217,17 @@ main_container = HSplit(
                     [
                         Frame(title="Поиск по названию", body=name_input_area),
                         Frame(title="Год выхода", body=year_input_area),
-                        raw_output_checkbox,
+                        Frame(body=raw_output_checkbox),
+                        Frame(body=Button(text="Хочу пони!", handler=lambda: debug_output())),
                     ],
                 ),
                 Frame(title="Жанры кино", body=category_input_area),
+                most_recent_request_area,
             ]
         ),
         search_button,
-        Button(text="Хочу пони!", handler=lambda: debug_output()),
         Frame(body=result_output_area, title="Результаты поиска"),
-        most_recent_request_area,
+        
     ]
 )
 
@@ -262,7 +241,6 @@ main_container_2 = HSplit(
                         Frame(title="Год выхода", body=year_input_area, height=5),
                         Frame(title="Жанры кино", body=category_input_area),
                         raw_output_checkbox,
-                        Button(text="Запилить", handler=lambda: debug_output()),
                         search_button,
                         most_recent_request_area,
                     ],
@@ -327,13 +305,13 @@ root_container = MenuContainer(
                     handler=lambda: change_theme(app_styles.black_white),
                 ),
                 MenuItem(
-                    "Cozy gray", handler=lambda: change_theme(app_styles.cozy_gray)
+                    "Cold steel", handler=lambda: change_theme(app_styles.cold_steel)
                 ),
                 MenuItem(
                     "Matrix", handler=lambda: change_theme(app_styles.matrix_style)
                 ),
                 MenuItem(
-                    "cozy warm", handler=lambda: change_theme(app_styles.cozy_warm_style)
+                    "Cozy warm", handler=lambda: change_theme(app_styles.cozy_warm_style)
                 ),
             ],
         ),
@@ -351,13 +329,13 @@ root_container = MenuContainer(
 bindings = KeyBindings()
 bindings.add("s-tab")(focus_previous)
 bindings.add("tab")(focus_next)
-bindings.add("c-q")(do_exit)
-bindings.add("c-c")(do_exit)
+bindings.add("c-q")(do_exit_with_confirm)
+bindings.add("c-c")(do_exit_with_confirm)
 
 application = Application(
     layout=Layout(root_container, focused_element=main_container),
     key_bindings=bindings,
-    style=app_styles.black_white,
+    style=app_styles.cozy_warm_style,
     mouse_support=True,
     full_screen=True,
 )
