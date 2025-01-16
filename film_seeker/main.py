@@ -1,5 +1,4 @@
 from tabulate import tabulate
-from time import sleep
 from prompt_toolkit import prompt
 from prompt_toolkit.shortcuts import message_dialog
 from prompt_toolkit.application import Application
@@ -11,7 +10,6 @@ from prompt_toolkit.layout.containers import Float, HSplit, VSplit
 from prompt_toolkit.layout.dimension import D
 from prompt_toolkit.layout.layout import Layout
 from prompt_toolkit.layout.menus import CompletionsMenu
-from prompt_toolkit.styles import Style
 from prompt_toolkit.formatted_text import ANSI
 from prompt_toolkit.widgets import (
     Box,
@@ -29,6 +27,8 @@ from prompt_toolkit.widgets import (
 )
 from sakila_models import *
 import info_texts
+import app_styles
+import datetime
 
 
 # Подключение нам необходимо с нулевой так что мы не можем себе позволить проверять подключения после инициализации
@@ -39,35 +39,38 @@ db_connection_info = f"""
     Пользователь:   {db_user}\n
     """
 
-#Пытаемся долбится к базе
+# Пытаемся долбится к базе
 try:
     database.connect()
-    message_dialog(title="Успешно подключено к БД",text=f"{db_connection_info}").run()
+    message_dialog(title="Успешно подключено к БД", text=f"{db_connection_info}").run()
 except OperationalError:
     message_dialog(
         title="Ошибка подключения к БД",
         text=f"{info_texts.db_connection_fail_instructions}"
-            +f"\nТекущие параметры соединеня:\n{db_connection_info}"
-        ).run()
+        + f"\nТекущие параметры соединеня:\n{db_connection_info}",
+    ).run()
 
 # Тянем Жанры кино из базы
 Categoryes = [Checkbox(text=row.name) for row in Category.select()]
 
-# Тянем года выхода фильмов из базы 
+# Тянем года выхода фильмов из базы
 # (Мы не будем предлагать несуществующие года к автозаполнению поля)
 year_completer = WordCompleter(
     [str(film.release_year) for film in Film.select(Film.release_year).distinct()]
 )
 
 # Создаём виджеты
-result_output_area = TextArea(read_only=False, scrollbar=True, text = info_texts.logo)
+result_output_area = TextArea(read_only=False, scrollbar=True, text=info_texts.logo)
 name_input_area = TextArea(focus_on_click=True, multiline=False)
-year_input_area = TextArea(focus_on_click=True, completer=year_completer, multiline=False)
+year_input_area = TextArea(
+    focus_on_click=True, completer=year_completer, multiline=False
+)
 category_input_area = HSplit(Categoryes)
 test_button = Button(text="Запилить", handler=lambda: debug_output())
 search_button = Button(text="Нйти", handler=lambda: serach())
-raw_output_checkbox = Checkbox(text="Упрощённый вывод")
-
+raw_output_checkbox = Checkbox(text="JSON вывод")
+history_content = []
+most_recent_request_area = Frame(body=HSplit(history_content), title="История")
 
 
 def confirm_exit(should_exit):
@@ -94,7 +97,19 @@ def do_exit_with_confirm(something=None):
 
 def debug_output():
     # result_output_area.text = str(get_app().layout.container.content.get_children()[-1])
-    result_output_area.text = info_texts.logo
+    result_output_area.text = info_texts.luna
+    # query = (
+    #     Film.select(
+    #         Film.film_id,
+    #         Film.title,
+    #         Category.name.alias("category"),
+    #         Film.release_year,
+    #         Film.description,
+    #     )
+    #     .join(FilmCategory, on=(Film.film_id == FilmCategory.film_id))
+    #     .join(Category, on=(FilmCategory.category_id == Category.category_id))
+    # ).limit(5)
+    # most_recent_request_area.text = str(query)
 
 
 def show_warn(head, body):
@@ -118,16 +133,31 @@ def build_cool_output(query):
     ]
     return tabulate(data, headers="keys", tablefmt="grid")
 
+
+def show_result(query):
+    # Если чекбокс "Упрощённый вывод" включён
+    if raw_output_checkbox.checked:
+        result = "\n".join([str(i) for i in query.dicts()])
+    # Если хотим красивый вывод
+    # Но помним, что печать символов в консоль дорогая операция
+    else:
+        result = build_cool_output(query.dicts())
+    result_output_area.text = result
+
+
 # Основная функция обработки запроса
-def serach():
+def serach(query=False):
+    if query:
+        show_result(query)
+        return
     # Базовый запрос. Будем прикручивать к нему фильтры по ходу
     query = (
         Film.select(
-            Film.film_id, 
-            Film.title, 
-            Category.name.alias("category"), 
+            Film.film_id,
+            Film.title,
+            Category.name.alias("category"),
             Film.release_year,
-            Film.description
+            Film.description,
         )
         .join(FilmCategory, on=(Film.film_id == FilmCategory.film_id))
         .join(Category, on=(FilmCategory.category_id == Category.category_id))
@@ -147,13 +177,15 @@ def serach():
 
     # ВЫХЛОП если что-то нашли
     if len(query) != 0:
-        # Если чекбокс "Упрощённый вывод" включён
-        if raw_output_checkbox.checked:
-            result = "\n".join([str(i) for i in query.dicts()])
-        # Если хотим красивый вывод
-        # Но помним, что печать символов в консоль дорогая операция
-        else:
-            result = build_cool_output(query.dicts())
+        show_result(query)
+        # Сохраним запрос для быстрого вызова:
+        query_time = str(datetime.datetime.now().time())
+        history_content.append(
+            Button(
+                text=query_time, handler=lambda: serach(query), width=len(query_time)
+            )
+        )
+        most_recent_request_area.body = HSplit(history_content)
     # ВЫХЛОП если хрен там плавал
     else:
         show_warn(
@@ -162,9 +194,8 @@ def serach():
             + f"Год: '{year_input_area.text}'\n"
             + f"Жанры: {str(Categoryes_list)}\n",
         )
-        result = info_texts.logo
-    # Выхлопываем
-    result_output_area.text = result
+        result_output_area.text = info_texts.logo
+
 
 def show_help():
     dialog = Dialog(
@@ -190,6 +221,12 @@ def change_layout(container_placeholder):
     app.invalidate()
 
 
+def change_theme(style):
+    app = get_app()
+    app.style = style
+    app.invalidate()
+
+
 def close_dialog():
     root_container.floats.pop()
 
@@ -211,6 +248,7 @@ main_container = HSplit(
         search_button,
         Button(text="Хочу пони!", handler=lambda: debug_output()),
         Frame(body=result_output_area, title="Результаты поиска"),
+        most_recent_request_area,
     ]
 )
 
@@ -224,7 +262,9 @@ main_container_2 = HSplit(
                         Frame(title="Год выхода", body=year_input_area, height=5),
                         Frame(title="Жанры кино", body=category_input_area),
                         raw_output_checkbox,
+                        Button(text="Запилить", handler=lambda: debug_output()),
                         search_button,
+                        most_recent_request_area,
                     ],
                     width=20,
                 ),
@@ -237,7 +277,7 @@ main_container_2 = HSplit(
 main_container_3 = HSplit(
     [
         VSplit(
-            [   
+            [
                 Frame(body=result_output_area, title="Результаты поиска"),
                 HSplit(
                     [
@@ -246,6 +286,7 @@ main_container_3 = HSplit(
                         Frame(title="Жанры кино", body=category_input_area),
                         raw_output_checkbox,
                         search_button,
+                        most_recent_request_area,
                     ],
                     width=20,
                 ),
@@ -269,8 +310,31 @@ root_container = MenuContainer(
             "Layouts",
             children=[
                 MenuItem("Layout ugly", handler=lambda: change_layout(main_container)),
-                MenuItem("Layout left sided", handler=lambda: change_layout(main_container_2)),
-                MenuItem("Layout right sided", handler=lambda: change_layout(main_container_3)),
+                MenuItem(
+                    "Layout left sided", handler=lambda: change_layout(main_container_2)
+                ),
+                MenuItem(
+                    "Layout right sided",
+                    handler=lambda: change_layout(main_container_3),
+                ),
+            ],
+        ),
+        MenuItem(
+            "Темы",
+            children=[
+                MenuItem(
+                    "Black & White",
+                    handler=lambda: change_theme(app_styles.black_white),
+                ),
+                MenuItem(
+                    "Cozy gray", handler=lambda: change_theme(app_styles.cozy_gray)
+                ),
+                MenuItem(
+                    "Matrix", handler=lambda: change_theme(app_styles.matrix_style)
+                ),
+                MenuItem(
+                    "cozy warm", handler=lambda: change_theme(app_styles.cozy_warm_style)
+                ),
             ],
         ),
     ],
@@ -290,51 +354,10 @@ bindings.add("tab")(focus_next)
 bindings.add("c-q")(do_exit)
 bindings.add("c-c")(do_exit)
 
-# style = Style.from_dict(
-#     {
-#         "window.border": "#ff8888",
-#         "shadow": "bg:#222222",
-#         "menu-bar": "bg:#aaaaaa #888888",
-#         "menu-bar.selected-item": "bg:#ffffff #000000",
-#         "menu": "bg:#888888 #ffffff",
-#         "menu.border": "#aaaaaa",
-#         "window.border shadow": "#444444",
-#         "focused  button": "bg:#880000 #ffffff noinherit",
-#         # Styling for Dialog widgets.
-#         "button-bar": "bg:#aaaaff fg:#ffffff",
-#         "checkbox": "bg:#444444 fg:#ffffff",      # Стиль для текста чекбокса
-#         "checkbox.checked": "bg:#228B22 fg:#00ff00",  # Стиль для отмеченного чекбокса
-#         "checkbox.unchecked": "bg:#8B0000 fg:#ff0000",  # Стиль для неотмеченного чекбокса
-#     }
-# )
-
-style = Style.from_dict({
-    # Основной фон и текст
-    "": "bg:#000000 fg:#ffffff",  # Общий стиль
-    "frame": "bg:#444444 fg:#ffffff",  # Стиль рамок
-    "frame.label": "bg:#FFFFFF fg:#000000 bold",  # Заголовок рамок
-    "dialog.body": "bg:#333333 fg:#ffffff",  # Тело диалога
-    "button": "bg:#555555 fg:#ffffff",  # Кнопки
-    "button.focused": "bg:#228b22 fg:#ffffff bold",  # Активная кнопка
-    "checkbox": "bg:#444444 fg:#ffffff",  # Чекбоксы
-    "checkbox.checked": "bg:#228b22 fg:#ffffff",  # Отмеченные чекбоксы
-    "checkbox.unchecked": "bg:#8b0000 fg:#ffffff",  # Неотмеченные чекбоксы
-    "input": "bg:#222222 fg:#ffffff",  # Поля ввода
-    "text-area": "bg:#222222 fg:#ffffff",  # Текстовые области
-    "menu-bar": "bg:#444444 fg:#ffffff",  # Меню
-    "menu-bar.selected-item": "bg:#228b22 fg:#ffffff bold",  # Выбранный элемент меню
-    "menu": "bg:#333333 fg:#ffffff",  # Выпадающее меню
-    "menu.border": "bg:#228b22",  # Граница меню
-    "scrollbar.background": "bg:#555555",  # Ползунок прокрутки
-    "scrollbar.button": "bg:#888888",  # Кнопка ползунка
-    "status-bar": "bg:#333333 fg:#ffffff",  # Статусная строка
-    "status-bar.title": "bold",  # Заголовок в статусной строке
-})
-
 application = Application(
     layout=Layout(root_container, focused_element=main_container),
     key_bindings=bindings,
-    style=style,
+    style=app_styles.black_white,
     mouse_support=True,
     full_screen=True,
 )
