@@ -93,7 +93,7 @@ def save_most_recent(search_params):
             append=0
     if append:
         history_content.append({"search_params":search_params, "count":1})
-        most_recent_request_area.text = get_most_recent(history_content)
+    most_recent_request_area.text = get_most_recent(history_content)
 
 
 
