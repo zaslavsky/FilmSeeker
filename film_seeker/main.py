@@ -24,7 +24,7 @@ from prompt_toolkit.widgets import (
 from sakila_models import *
 import info_texts
 import app_styles
-import datetime
+import pickle
 
 
 # Подключение нам необходимо с нулевой так что мы не можем себе позволить проверять подключения после инициализации
@@ -46,6 +46,15 @@ except OperationalError:
         + f"\nТекущие параметры соединеня:\n{db_connection_info}",
     ).run()
 
+# Расчекрыживаем соленья
+pickle_filename = "history.pkl"
+try:
+    with open(pickle_filename, "rb") as file:
+        history_content = pickle.load(file)
+except:
+    history_content = []
+
+
 # Тянем Жанры кино из базы
 Categoryes = [Checkbox(text=row.name) for row in Category.select()]
 
@@ -65,11 +74,36 @@ category_input_area = HSplit(Categoryes)
 test_button = Button(text="Запилить", handler=lambda: debug_output())
 search_button = Button(text="Нйти", handler=lambda: serach())
 raw_output_checkbox = Checkbox(text="JSON вывод")
-history_content = []
-most_recent_request_area = Frame(body=HSplit(history_content), title="История")
+# history_content = []
+
+def get_most_recent(traget):
+    return "\n".join(["Слова: '{}' | Год: '{}' | Жанры: '{}'".format(
+        i["search_params"]["name"],
+        i["search_params"]["year"],
+        i["search_params"]["categoryes"],
+        ) for i in sorted(traget, key=lambda x: x["count"], reverse=True)])
+
+most_recent_request_area = TextArea(text=get_most_recent(history_content))
+
+def save_most_recent(search_params):
+    append=1
+    for item in history_content:
+        if search_params == item["search_params"]:
+            item["count"] += 1
+            append=0
+    if append:
+        history_content.append({"search_params":search_params, "count":1})
+        most_recent_request_area.text = get_most_recent(history_content)
+
+
 
 
 def do_exit(something=None):
+    try:
+        with open(pickle_filename, "wb") as file:
+            pickle.dump(history_content, file)
+    except:
+        print("нихуя не вышло")
     get_app().exit(result=False)
 
 
@@ -157,13 +191,17 @@ def serach(query=False):
     if len(query) != 0:
         show_result(query)
         # Сохраним запрос для быстрого вызова:
-        query_time = str(datetime.datetime.now().time())
-        history_content.append(
-            Button(
-                text=query_time, handler=lambda: serach(query), width=len(query_time)
-            )
-        )
-        most_recent_request_area.body = HSplit(history_content)
+        # query_time = str(datetime.datetime.now().time())
+        # history_content.append(
+        #     Button(
+        #         text=query_time, handler=lambda: serach(query), width=len(query_time)
+        #     )
+        # )
+        save_most_recent({
+            "name":name_input_area.text,
+            "year":year_input_area.text,
+            "categoryes":Categoryes_list})
+        # most_recent_request_area.body = HSplit(history_content)
     # ВЫХЛОП если хрен там плавал
     else:
         show_warn(
@@ -222,7 +260,7 @@ main_container = HSplit(
                     ],
                 ),
                 Frame(title="Жанры кино", body=category_input_area),
-                most_recent_request_area,
+                Frame(title="Популярные запросы", body=most_recent_request_area),
             ]
         ),
         search_button,
@@ -242,7 +280,7 @@ main_container_2 = HSplit(
                         Frame(title="Жанры кино", body=category_input_area),
                         raw_output_checkbox,
                         search_button,
-                        most_recent_request_area,
+                        Frame(title="Популярные запросы", body=most_recent_request_area),
                     ],
                     width=20,
                 ),
@@ -264,7 +302,7 @@ main_container_3 = HSplit(
                         Frame(title="Жанры кино", body=category_input_area),
                         raw_output_checkbox,
                         search_button,
-                        most_recent_request_area,
+                        Frame(title="Популярные запросы", body=most_recent_request_area),
                     ],
                     width=20,
                 ),
@@ -274,7 +312,7 @@ main_container_3 = HSplit(
 )
 
 root_container = MenuContainer(
-    body=main_container_2,
+    body=main_container,
     menu_items=[
         MenuItem(
             "Menu",
@@ -287,7 +325,7 @@ root_container = MenuContainer(
         MenuItem(
             "Layouts",
             children=[
-                MenuItem("Layout ugly", handler=lambda: change_layout(main_container)),
+                MenuItem("Layout middle", handler=lambda: change_layout(main_container)),
                 MenuItem(
                     "Layout left sided", handler=lambda: change_layout(main_container_2)
                 ),
